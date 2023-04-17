@@ -313,6 +313,7 @@ export async function handleOfferPlace(context: Context): Promise<void> {
   await context.store.save(offer);
 
   const meta = String(event.amount || '');
+  await createEvent(entity, Interaction.CREATE_OFFER, event, meta, context.store, entity ? entity.currentOwner : '');
   await createOfferEvent(offer, OfferInteraction.CREATE, event, meta, context.store, entity ? entity.currentOwner : '');
 }
 
@@ -337,11 +338,12 @@ export async function handleOfferAccept(context: Context): Promise<void> {
 
   logger.success(`[ACCEPT OFFER] for ${id} by ${event.caller} for ${String(event.amount)}`);
 
-  const { currentOwner } = ensure<NE>(await get(context.store, NE, tokenId));
+  const nftEntity = ensure<NE>(await get(context.store, NE, tokenId));
 
   await context.store.save(entity);
   const meta = String(event.amount || '');
-  await createOfferEvent(entity, OfferInteraction.ACCEPT, event, meta, context.store, currentOwner);
+  await createEvent(nftEntity, Interaction.ACCEPT_OFFER, event, meta, context.store, nftEntity.currentOwner || '');
+  await createOfferEvent(entity, OfferInteraction.ACCEPT, event, meta, context.store, nftEntity.currentOwner);
   await updateCache(event.timestamp, context.store);
 }
 
@@ -350,9 +352,16 @@ export async function handleOfferWithdraw(context: Context): Promise<void> {
   const event = unwrap(context, getWithdrawOfferEvent);
   logger.debug(`offer no: ${JSON.stringify(event, null, 2)}`);
   const tokenId = tokenIdOf(event);
-  const { currentOwner } = ensure<NE>(await get(context.store, NE, tokenId));
+  logger.debug(`token: ${tokenId}`);
 
-  const offerMaker = currentOwner === event.caller ? event.maker : event.caller;
+  const nftEntity = ensure<NE>(await get(context.store, NE, tokenId));
+
+  if (!nftEntity) {
+    logger.warn(`[WITHDRAW OFFER] ${tokenId} entity not found.. Skipping`);
+    return;
+  }
+
+  const offerMaker = nftEntity.currentOwner === event.caller ? event.maker : event.caller;
   const id = createOfferId(tokenId, offerMaker);
 
   const entity = ensure<Offer>(await get(context.store, Offer, id));
@@ -365,7 +374,8 @@ export async function handleOfferWithdraw(context: Context): Promise<void> {
 
   await context.store.save(entity);
   const meta = String(entity.price || '');
-  await createOfferEvent(entity, OfferInteraction.CANCEL, event, meta, context.store, currentOwner);
+  await createEvent(nftEntity, Interaction.CANCEL_OFFER, event, meta, context.store, nftEntity.currentOwner || '');
+  await createOfferEvent(entity, OfferInteraction.CANCEL, event, meta, context.store, nftEntity.currentOwner);
   // TODO: Set expired offers to expired
 }
 

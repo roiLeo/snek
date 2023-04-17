@@ -230,6 +230,7 @@ export function getPlaceOfferEvent(ctx: Context): MakeOfferEvent {
 
 export function getWithdrawOfferEvent(ctx: Context): WithdrawOfferEvent {
   const event = new MarketplaceOfferWithdrawnEvent(ctx);
+  console.log(event)
 
   if (event.isV55) {
     const { who: caller, class: classId, instance: instanceId } = event.asV55;
